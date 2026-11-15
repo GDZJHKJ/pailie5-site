@@ -1,0 +1,43 @@
+name: Update P5 Draws
+
+on:
+  schedule:
+    # 每天 UTC 14:00 = 北京时间 22:00（排列5 21:30 开奖后）
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-p5-draws
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch latest draws from official endpoint
+        id: fetch
+        run: |
+          python scripts/fetch_data.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/draws.json
+          if git diff --cached --quiet; then
+            echo "No changes — data already up to date."
+          else
+            git commit -m "chore(data): update 排列5 draws (auto) $(date -u +%Y-%m-%d)"
+            git push
+          fi

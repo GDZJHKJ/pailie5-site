@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<title>排列五 · 开奖数据分析与杀号排除</title>
+<meta name="description" content="中国体育彩票排列5历史开奖号码公开数据查询、频率统计、遗漏统计、杀号排除方案与滑动窗口回测。仅统计分析，不构成预测。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">数</span>
+    <div>
+      <h1>排列五 · 开奖数据分析</h1>
+      <small>历史频率 · 遗漏 · 杀号排除 · 滑动窗口回测</small>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button class="btn ghost" id="reload" title="重新读取 data/draws.json">↻ 刷新数据</button>
+    <label class="btn ghost" for="import">导入 JSON</label>
+    <input id="import" type="file" accept="application/json,.json" hidden>
+    <button class="btn ghost" id="export">导出备份</button>
+  </div>
+</header>
+
+<div class="status-bar">
+  <div id="sourceStatus" class="status">正在读取本地数据…</div>
+</div>
+
+<div class="notice">
+  ⚠️ 免责声明：彩票开奖号码由随机设备产生、各期相互独立、<b>无法预测</b>。本站仅提供公开开奖信息的统计与回测工具，
+  “杀号/排除”是基于历史频率的统计观察，<b>不改变中奖概率、不承诺任何中奖结果</b>。请理性购彩、量力而行，未成年人不得购彩。
+</div>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="kill">杀号方案</button>
+  <button class="tab" data-tab="freq">频率统计</button>
+  <button class="tab" data-tab="omit">遗漏统计</button>
+  <button class="tab" data-tab="backtest">回测验证</button>
+  <button class="tab" data-tab="history">历史开奖</button>
+  <button class="tab" data-tab="method">方法说明</button>
+</nav>
+
+<main>
+  <!-- 杀号方案 -->
+  <section id="tab-kill" class="tab-panel active">
+    <div class="panel">
+      <h2>杀号排除方案</h2>
+      <p class="muted">基于选定窗口内各位置 0-9 的出现频率，取<b>出现最少</b>的若干数字作为“杀号候选”。可手动增删后保存方案。</p>
+      <div class="controls-row">
+        <label>统计窗口
+          <select id="killWindow">
+            <option value="30">近 30 期</option>
+            <option value="50">近 50 期</option>
+            <option value="100" selected>近 100 期</option>
+            <option value="200">近 200 期</option>
+            <option value="300">近 300 期</option>
+            <option value="500">近 500 期</option>
+          </select>
+        </label>
+        <label>每位置杀号数
+          <select id="killCount">
+            <option>1</option><option>2</option><option selected>3</option>
+            <option>4</option><option>5</option><option>6</option>
+            <option>7</option><option>8</option><option>9</option>
+          </select>
+        </label>
+        <button class="btn primary" id="generate">生成杀号方案</button>
+        <button class="btn ghost" id="reset">清空选择</button>
+        <button class="btn ghost" id="savePlan">保存方案</button>
+      </div>
+      <div id="positions" class="positions"></div>
+      <div id="summary" class="summary"></div>
+    </div>
+    <div class="panel">
+      <h2>已保存方案</h2>
+      <div id="planTable" class="empty">尚无方案</div>
+    </div>
+  </section>
+
+  <!-- 频率统计 -->
+  <section id="tab-freq" class="tab-panel">
+    <div class="panel">
+      <h2>位置频率分布</h2>
+      <p class="muted">各位置 0-9 在不同窗口内的出现次数与占比。理论上每个数字出现概率为 10%。</p>
+      <div id="freqView"></div>
+      <div id="chiView" class="chi-block"></div>
+    </div>
+  </section>
+
+  <!-- 遗漏统计 -->
+  <section id="tab-omit" class="tab-panel">
+    <div class="panel">
+      <h2>遗漏统计</h2>
+      <p class="muted">“当前遗漏”= 自最近一次出现至今的连续未开期数；“最大遗漏”= 历史最长未开期数。遗漏大不代表“该出”，仅作统计观察。</p>
+      <div id="omitView"></div>
+    </div>
+  </section>
+
+  <!-- 回测 -->
+  <section id="tab-backtest" class="tab-panel">
+    <div class="panel">
+      <h2>滑动窗口回测</h2>
+      <p class="muted">用历史数据检验“按频率杀号”的命中率，并与随机排除同样数量数字的理论基准对比。</p>
+      <div class="controls-row">
+        <label>训练窗口
+          <select id="btWindow">
+            <option value="30">30</option>
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="200">200</option>
+            <option value="300">300</option>
+          </select>
+        </label>
+        <label>每位置杀号数
+          <select id="btK">
+            <option>1</option><option>2</option><option selected>3</option>
+            <option>4</option><option>5</option>
+          </select>
+        </label>
+        <button class="btn primary" id="runBt">运行回测</button>
+      </div>
+      <div id="btResult" class="empty">点“运行回测”开始</div>
+    </div>
+  </section>
+
+  <!-- 历史 -->
+  <section id="tab-history" class="tab-panel">
+    <div class="panel">
+      <h2>历史开奖</h2>
+      <div class="controls-row">
+        <input id="search" type="search" placeholder="按期号或号码搜索…" class="search">
+        <span id="histCount" class="muted"></span>
+      </div>
+      <div id="drawTable" class="empty">尚无数据</div>
+      <div class="pager">
+        <button class="btn ghost" id="prevPage">上一页</button>
+        <span id="pageInfo" class="muted"></span>
+        <button class="btn ghost" id="nextPage">下一页</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 方法说明 -->
+  <section id="tab-method" class="tab-panel">
+    <div class="panel prose">
+      <h2>方法与逻辑说明</h2>
+      <h3>1. 数据来源</h3>
+      <p>开奖号码来自中国体育彩票官方网站公开接口（中国体彩网，国家体育总局体育彩票管理中心），游戏编码 <code>350133</code>。
+      GitHub Actions 每日北京时间 22:00 自动拉取最新一期并更新 <code>data/draws.json</code>。号码为完整五位字符串，<b>保留前导零</b>。</p>
+
+      <h3>2. 杀号排除逻辑（频率法）</h3>
+      <p>对万位、千位、百位、十位、个位 <b>每个位置独立</b>处理：在选定窗口（如近 100 期）内统计 0-9 各数字出现次数，
+      取出现次数最少的 <code>K</code> 个数字作为该位置的“杀号候选”。直觉假设是“近期少出的数字短期内可能继续少出”，
+      但由于开奖各期独立同分布，<b>该假设在统计上不成立</b>，下方回测可验证。</p>
+
+      <h3>3. 滑动窗口回测</h3>
+      <p>将数据按时间排序，对每个测试期 <code>t</code>，用其前 <code>W</code> 期统计杀掉 <code>K</code> 个最低频数字，
+      再看第 <code>t</code> 期该位置实际开出的数字是否落在被杀集合中。统计命中率并与随机排除 <code>K</code> 个数字的理论基准
+      <code>K/10</code> 比较。长期结果应≈随机基准，说明历史频率<b>不改变下一期概率</b>。</p>
+
+      <h3>4. 均匀性检验（χ²）</h3>
+      <p>对每个位置在全样本上做卡方拟合优度检验（原假设：0-9 等概率），给出统计量与 p 值。
+      <code>p &gt; 0.05</code> 时结论固定表述为“未发现显著偏离均匀分布”，不得解读为“某数字更易出”。</p>
+
+      <h3>5. 重要结论</h3>
+      <blockquote>排列五每位为 0-9 独立等概率随机，历史频率、遗漏、冷热均不影响下一期分布。
+      任何“杀号/缩水/遗漏分析”策略在样本外回测中与随机不可区分，<b>不能提高中奖概率</b>。
+      本工具仅供统计学习与娱乐，请理性购彩。</blockquote>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div>数据来源：<a href="https://www.lottery.gov.cn/" target="_blank" rel="noopener">中国体彩网 lottery.gov.cn</a>
+    · 接口 <code>webapi.sporttery.cn</code> · 游戏 <code>排列5 / 350133</code></div>
+  <div class="muted">© 2026 排列五开奖数据分析 · 仅供统计学习 · 不构成购彩建议</div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
