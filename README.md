@@ -33,12 +33,13 @@ pailie5-site/
 ├─ style.css               # 样式（深色主题）
 ├─ app.js                  # 分析与交互逻辑（纯 vanilla，无依赖）
 ├─ .nojekyll               # 让 GitHub Pages 原样输出 data/*.json
+├─ cloudflare-worker.js    # Cloudflare Worker 中继代码（绕过体彩 WAF 的 IP 拦截）
 ├─ data/
 │  └─ draws.json           # 种子数据（500 期，官方接口抓取）
 ├─ scripts/
-│  └─ fetch_data.py        # 官方接口抓取脚本（标准库，原子写）
+│  └─ fetch_data.py        # 官方接口抓取脚本（标准库，原子写，支持 PROXY_URL）
 └─ .github/workflows/
-   └─ update-draws.yml     # 每日自动拉取并提交更新
+   └─ update-draws.yml     # 21:25-22:00 每分钟轮询，自动拉取并提交更新
 ```
 
 ## 本地运行
@@ -73,11 +74,43 @@ python3 scripts/fetch_data.py
 
 ## 自动更新开奖数据
 
-`.github/workflows/update-draws.yml` 每天 UTC 14:00（北京时间 22:00，开奖后）自动运行 `scripts/fetch_data.py` 并提交更新。
+`.github/workflows/update-draws.yml` 每天北京时间 **21:25-22:00 每分钟轮询**体彩官方接口，开奖后第一时间抓取并提交更新。
 
-**首次需开启 Actions 写权限**：Settings → Actions → General → Workflow permissions → 勾选 **Read and write permissions**。
+### ⚠️ 必须部署 Cloudflare Worker（否则 Actions 无法访问体彩接口）
 
-也可在仓库 Actions 页手动触发 `Update P5 Draws` 工作流（`workflow_dispatch`）。
+体彩官方接口的 WAF 会拦截 GitHub Actions 的 Azure 服务器 IP（返回 HTTP 567）。需要部署一个免费的 Cloudflare Worker 做中继：
+
+**1. 创建 Worker（2 分钟，免费）**
+
+1. 打开 <https://dash.cloudflare.com> → 注册/登录（免费）
+2. 左侧 **Workers & Pages** → **Create** → **Create Worker**
+3. Name 随便填（如 `p5-proxy`），点 **Deploy**
+4. 点 **Edit code**，删除默认代码，粘贴 `cloudflare-worker.js` 的全部内容
+5. 点 **Deploy**
+6. 复制 Worker URL（形如 `https://p5-proxy.<你的用户名>.workers.dev`）
+
+**2. 测试 Worker**
+
+浏览器打开 `https://p5-proxy.xxx.workers.dev/?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1`，应返回 JSON 开奖数据。
+
+**3. 添加 GitHub Secret**
+
+仓库 **Settings → Secrets and variables → Actions → New repository secret**：
+- Name: `PROXY_URL`
+- Value: 你的 Worker URL（如 `https://p5-proxy.xxx.workers.dev`）
+
+设置后 Actions 工作流会自动通过 Worker 中继访问体彩接口。未设置时脚本直连（适用于本地/非云环境）。
+
+### 手动触发
+
+也可在仓库 **Actions** 页手动触发 `Update P5 Draws` 工作流（`workflow_dispatch`）测试。
+
+### 工作流逻辑
+
+1. 北京时间 21:25 启动，共 36 轮（每轮间隔 60 秒，覆盖 21:25-22:00）
+2. 每轮先用 `--check` 模式轻量检查（1 次 API 调用，比较最新期号）
+3. 检测到新数据 → 全量拉取 500 期 → `git commit` → `git push` → 退出
+4. 无新数据 → 等 60 秒 → 下一轮
 
 ## 杀号排除逻辑
 

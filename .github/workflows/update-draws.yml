@@ -28,6 +28,11 @@ jobs:
           python-version: "3.11"
 
       - name: Poll for latest draws (21:25-22:00 Beijing, every 60s)
+        env:
+          # Cloudflare Worker 中继 URL（体彩接口会拦截 GitHub Actions 的 Azure IP，返回 HTTP 567）
+          # 部署方法见 README.md → Cloudflare Worker 部署
+          # 未设置时直连体彩接口（适用于本地/非云环境）
+          PROXY_URL: ${{ secrets.PROXY_URL }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

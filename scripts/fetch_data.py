@@ -7,6 +7,8 @@ official public endpoint and write them to data/draws.json atomically.
 - 仅使用标准库；不绕过验证码/登录/WAF/频率限制；失败时旧文件保持不变。
 - number 为完整五位开奖号码（字符串，保留前导零）。
 - --check 模式：仅拉取第 1 页比较最新期号，不写文件，供轮询使用。
+- PROXY_URL 环境变量：设置后通过 Cloudflare Worker 中继访问体彩接口
+  （GitHub Actions 的 Azure IP 被体彩 WAF 拦截返回 HTTP 567，需走中继）。
 """
 import argparse
 import json
@@ -26,28 +28,40 @@ TARGET = int(os.getenv("SPORTTERY_TARGET", "500"))
 MAX_PAGES = int(os.getenv("SPORTTERY_MAX_PAGES", "6"))
 MAX_RETRIES = int(os.getenv("SPORTTERY_MAX_RETRIES", "4"))
 OUT = Path(os.getenv("OUT_PATH", "data/draws.json"))
+# Cloudflare Worker 中继 URL（GitHub Actions 需设置此变量）
+PROXY_URL = os.getenv("PROXY_URL", "")
 
 
 def request_page(page: int):
+    """请求一页数据。如果设置了 PROXY_URL，通过中继访问；否则直连。"""
     params = f"?gameNo={GAME_NO}&provinceId=0&pageSize={PAGE_SIZE}&isVerify=1&pageNo={page}"
-    req = Request(URL + params, headers={
+
+    if PROXY_URL:
+        full_url = PROXY_URL.rstrip("/") + params
+    else:
+        full_url = URL + params
+
+    headers = {
         "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36",
         "Accept": "application/json, text/plain, */*",
         "Referer": "https://www.lottery.gov.cn/",
-    })
+    }
+
+    label = "proxy" if PROXY_URL else "direct"
     for attempt in range(1, MAX_RETRIES + 1):
         try:
+            req = Request(full_url, headers=headers)
             with urlopen(req, timeout=25) as resp:
                 raw = resp.read().decode("utf-8", "replace")
             return json.loads(raw)
         except (HTTPError, URLError) as exc:
             if attempt < MAX_RETRIES:
-                wait = 10 * attempt
-                print(f"[retry {attempt}/{MAX_RETRIES}] page {page}: {exc}; sleep {wait}s", flush=True)
+                wait = 5 * attempt
+                print(f"[{label} retry {attempt}/{MAX_RETRIES}] page {page}: {exc}; sleep {wait}s", flush=True)
                 time.sleep(wait)
                 continue
-            raise RuntimeError(f"page {page} 连续 {MAX_RETRIES} 次失败: {exc}") from exc
-    raise RuntimeError(f"page {page} retries exhausted")
+            raise RuntimeError(f"page {page} [{label}] 连续 {MAX_RETRIES} 次失败: {exc}") from exc
+    raise RuntimeError(f"page {page} [{label}] retries exhausted")
 
 
 def parse_records(payload):
