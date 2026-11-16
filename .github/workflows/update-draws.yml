@@ -27,6 +27,24 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Debug Worker response
+        env:
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+        run: |
+          echo "PROXY_URL set: $([ -n "$PROXY_URL" ] && echo YES || echo NO)"
+          if [ -n "$PROXY_URL" ]; then
+            echo "Worker URL: $PROXY_URL"
+            echo "--- Health check ---"
+            curl -s -m 15 "$PROXY_URL/health" || echo "(health check failed)"
+            echo ""
+            echo "--- API test (pageSize=1) ---"
+            curl -s -m 20 "$PROXY_URL/?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1" | head -c 1000
+            echo ""
+            echo "--- HTTP status ---"
+            curl -s -o /dev/null -w "%{http_code}" -m 20 "$PROXY_URL/?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1"
+            echo ""
+          fi
+
       - name: Poll for latest draws (21:25-22:00 Beijing, every 60s)
         env:
           # Cloudflare Worker 中继 URL（体彩接口会拦截 GitHub Actions 的 Azure IP，返回 HTTP 567）
