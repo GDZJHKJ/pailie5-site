@@ -1,15 +1,23 @@
 {
   "meta": {
-    "source": "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133",
+    "source": "500.com 排列5 开奖镜像（官方接口对境外 IP 返回 567，自动降级取数）",
+    "source_url": "https://kaijiang.500.com/static/info/kaijiang/xml/plw/list.xml",
+    "official_source": "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133",
     "game_no": "350133",
     "game_name": "排列5",
     "records": 500,
-    "latest_issue": "26305",
-    "latest_date": "2026-11-15",
-    "status": "official endpoint fetch",
-    "note": "号码为官方五位开奖号码字符串（保留前导零）；按期号新→旧排序"
+    "latest_issue": "26306",
+    "latest_date": "2026-11-16",
+    "status": "mirror fetch (mirror 与官方历史数据逐条校验通过)",
+    "verification": "与本地官方数据重叠 499 期，号码/日期不一致 0 条",
+    "note": "号码为五位开奖号码字符串（保留前导零）；按期号新→旧排序"
   },
   "draws": [
+    {
+      "period": "26306",
+      "date": "2026-11-16",
+      "number": "03243"
+    },
     {
       "period": "26305",
       "date": "2026-11-15",
@@ -2504,11 +2512,6 @@
       "period": "25158",
       "date": "2025-06-17",
       "number": "88272"
-    },
-    {
-      "period": "25157",
-      "date": "2025-06-16",
-      "number": "25092"
     }
   ]
 }
