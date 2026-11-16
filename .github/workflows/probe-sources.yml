@@ -1,0 +1,36 @@
+name: Probe Data Sources
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Probe candidate endpoints
+        run: |
+          set +e
+          probe () {
+            name="$1"; url="$2"
+            code=$(curl -s -o /tmp/body -w "%{http_code}" --max-time 20 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36" "$url")
+            size=$(wc -c < /tmp/body 2>/dev/null || echo 0)
+            echo "[$name] http=$code size=$size time=$(date -u +%H:%M:%S)"
+            head -c 220 /tmp/body 2>/dev/null | tr -d '\n'
+            echo; echo "-----"
+          }
+          probe "official-webapi"   "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133&provinceId=0&pageSize=2&isVerify=1&pageNo=1"
+          probe "official-pdf"      "https://pdf.sporttery.cn/28300/26305/26305.pdf"
+          probe "zhcw-pl5-page"     "https://www.zhcw.com/kjxx/pl5/"
+          probe "zhcw-json"         "https://jc.zhcw.com/port/client_json.php?transactionType=10001001&lotteryId=283&issueCount=5&type=0&pageNum=1&pageSize=5"
+          probe "500-history"       "https://datachart.500.com/pls/history/newinc/history.php?limit=10&sort=0"
+          probe "500-page"          "https://kaijiang.500.com/pls.shtml"
+          probe "sina-lotto"        "https://match.lottery.sina.com.cn/lotto/pc_zst/index?lottoType=plw&actionType=chzs"
+          probe "jina-relay"        "https://r.jina.ai/https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133&provinceId=0&pageSize=2&isVerify=1&pageNo=1"
+          probe "allorigins"        "https://api.allorigins.win/raw?url=https%3A%2F%2Fwebapi.sporttery.cn%2Fgateway%2Flottery%2FgetHistoryPageListV1.qry%3FgameNo%3D350133%26provinceId%3D0%26pageSize%3D2%26isVerify%3D1%26pageNo%3D1"
+          probe "codetabs"          "https://api.codetabs.com/v1/proxy?quest=https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry%3FgameNo%3D350133%26provinceId%3D0%26pageSize%3D2%26isVerify%3D1%26pageNo%3D1"
+          probe "supabase-proxy"    "https://baysgqxzondnhsjymkiv.supabase.co/functions/v1/p5-proxy?gameNo=350133&pageSize=2&pageNo=1"
+          probe "google-baseline"   "https://www.google.com/generate_204"
