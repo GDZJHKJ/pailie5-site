@@ -132,7 +132,8 @@ def main():
 
     result = {
         "meta": {
-            "source": f"{MIRROR_URL}（500.com 静态镜像；官方接口对境外数据中心 IP 返回 567，改由境外可达镜像取数）",
+            "source": "500.com 排列5 开奖镜像（官方接口对境外 IP 返回 567，自动降级取数）",
+            "source_url": MIRROR_URL,
             "official_source": "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133",
             "game_no": "350133",
             "game_name": "排列5",
