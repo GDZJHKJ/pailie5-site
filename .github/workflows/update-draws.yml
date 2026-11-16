@@ -36,7 +36,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # 定时任务轮询 36 轮（覆盖 21:25-22:00）；手动触发默认只跑 1 轮便于快速验证连通性
+          # 定时任务轮询 36 轮（覆盖 21:25-22:00）；手动触发默认只跑 1 轮便于快速验证
           if [ "${{ github.event_name }}" = "schedule" ]; then
             ROUNDS=36
           else
@@ -45,32 +45,53 @@ jobs:
           fi
           echo "本次轮询次数：$ROUNDS（触发方式：${{ github.event_name }}）"
 
+          commit_if_changed () {
+            git add data/draws.json
+            if git diff --cached --quiet; then
+              echo ">>> 文件内容未变"
+              return 1
+            fi
+            git commit -m "chore(data): update 排列5 draws (auto, $1) $(date -u +%Y-%m-%d_%H:%M)"
+            git push
+            echo ">>> 已推送更新（数据源：$1）"
+            return 0
+          }
+
           for i in $(seq 1 $ROUNDS); do
-            NOW=$(date -u '+%H:%M UTC')
-            echo "=== 轮询 #$i/$ROUNDS ($NOW) ==="
+            echo "=== 轮询 #$i/$ROUNDS ($(date -u '+%H:%M UTC')) ==="
 
+            # 1) 优先官方接口
             python scripts/fetch_data.py --check
-            CHECK_CODE=$?
+            OFFICIAL=$?
 
-            if [ $CHECK_CODE -eq 2 ]; then
-              echo ">>> 检测到新数据，全量拉取 500 期..."
+            if [ $OFFICIAL -eq 2 ]; then
+              echo ">>> 官方接口有新数据，全量拉取 500 期..."
               if python scripts/fetch_data.py; then
-                git add data/draws.json
-                if git diff --cached --quiet; then
-                  echo ">>> 文件内容未变，继续等待"
-                else
-                  git commit -m "chore(data): update 排列5 draws (auto) $(date -u +%Y-%m-%d_%H:%M)"
-                  git push
-                  echo ">>> 更新完成！"
-                  exit 0
-                fi
+                commit_if_changed "official" && exit 0
               else
-                echo ">>> 全量拉取失败，继续等待"
+                echo ">>> 官方全量拉取失败，本轮降级到镜像源"
+                OFFICIAL=1
               fi
-            elif [ $CHECK_CODE -eq 0 ]; then
-              echo ">>> 暂无新数据"
-            else
-              echo ">>> 检查异常 (code=$CHECK_CODE)，跳过本轮"
+            fi
+
+            # 2) 官方不可达（境外 IP 常见 567 拦截）或有新数据但拉取失败 -> 镜像源
+            if [ $OFFICIAL -ne 0 ]; then
+              echo ">>> 官方接口不可用 (code=$OFFICIAL)，改用 500.com 镜像（写入前做重叠期逐条校验）"
+              python scripts/fetch_mirror.py --check
+              MIRROR=$?
+              if [ $MIRROR -eq 2 ]; then
+                if python scripts/fetch_mirror.py; then
+                  commit_if_changed "mirror" && exit 0
+                else
+                  echo ">>> 镜像全量拉取/校验失败，保留旧数据，继续等待"
+                fi
+              elif [ $MIRROR -eq 0 ]; then
+                echo ">>> 镜像确认：暂无新数据"
+              else
+                echo ">>> 镜像异常 (code=$MIRROR)"
+              fi
+            elif [ $OFFICIAL -eq 0 ]; then
+              echo ">>> 官方确认：暂无新数据"
             fi
 
             if [ $i -lt $ROUNDS ]; then
