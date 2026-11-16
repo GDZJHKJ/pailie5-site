@@ -6,13 +6,14 @@ official public endpoint and write them to data/draws.json atomically.
 - 接口：webapi.sporttery.cn ... gameNo=350133
 - 仅使用标准库；不绕过验证码/登录/WAF/频率限制；失败时旧文件保持不变。
 - number 为完整五位开奖号码（字符串，保留前导零）。
+- --check 模式：仅拉取第 1 页比较最新期号，不写文件，供轮询使用。
 """
+import argparse
 import json
 import os
 import re
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -74,6 +75,40 @@ def parse_records(payload):
     return list(found.values())
 
 
+def check_mode():
+    """轻量检查：拉取第 1 页，比较最新期号是否变化。不写文件。
+    exit 0 = 无变化; exit 2 = 有新数据需全量拉取; exit 1 = 错误
+    """
+    try:
+        payload = request_page(1)
+        batch = parse_records(payload)
+        if not batch:
+            print("CHECK: API 无数据", flush=True)
+            sys.exit(1)
+        api_latest = batch[0]["period"]
+        api_date = batch[0]["date"]
+        api_number = batch[0]["number"]
+
+        if not OUT.exists():
+            print(f"CHECK: 文件不存在, 需全量拉取 (API latest={api_latest})", flush=True)
+            sys.exit(2)
+
+        existing = json.loads(OUT.read_text(encoding="utf-8"))
+        file_latest = str(existing.get("meta", {}).get("latest_issue", ""))
+
+        if api_latest != file_latest:
+            print(f"CHECK: 新数据! API={api_latest}({api_date} {api_number}) vs FILE={file_latest}", flush=True)
+            sys.exit(2)
+        else:
+            print(f"CHECK: 无变化 latest={api_latest}", flush=True)
+            sys.exit(0)
+    except SystemExit:
+        raise
+    except Exception as exc:
+        print(f"CHECK: 错误 {exc}", flush=True)
+        sys.exit(1)
+
+
 def main():
     records = []
     errors = []
@@ -116,7 +151,6 @@ def main():
             "source": f"{URL}?gameNo={GAME_NO}",
             "game_no": GAME_NO,
             "game_name": "排列5",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
             "records": len(records),
             "latest_issue": records[0]["period"],
             "latest_date": records[0]["date"],
@@ -134,8 +168,17 @@ def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="排列5 开奖数据抓取")
+    parser.add_argument("--check", action="store_true",
+                        help="轻量检查模式：仅比较最新期号，不写文件")
+    args = parser.parse_args()
     try:
-        main()
+        if args.check:
+            check_mode()
+        else:
+            main()
+    except SystemExit:
+        raise
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr, flush=True)
         sys.exit(1)

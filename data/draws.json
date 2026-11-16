@@ -3,7 +3,6 @@
     "source": "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133",
     "game_no": "350133",
     "game_name": "排列5",
-    "updated_at": "2026-11-16T00:05:27.283158+00:00",
     "records": 500,
     "latest_issue": "26305",
     "latest_date": "2026-11-15",
