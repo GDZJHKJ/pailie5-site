@@ -3,7 +3,6 @@ name: Update P5 Draws
 on:
   schedule:
     # 每天 UTC 13:25 = 北京时间 21:25 开始轮询
-    # 排列5 通常 21:30 左右开奖，21:25 开始每分钟检查一次
     - cron: "25 13 * * *"
   workflow_dispatch:
 
@@ -27,43 +26,12 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Debug Supabase function response
-        env:
-          PROXY_URL: ${{ secrets.PROXY_URL }}
-        run: |
-          echo "=== 1. Supabase health ==="
-          curl -s -m 15 "$PROXY_URL" | head -c 200
-          echo ""
-          echo "=== 2. Supabase → lottery API (expected: 567 blocked) ==="
-          curl -s -m 30 "$PROXY_URL?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1" | head -c 200
-          echo ""
-          echo "=== 3. Direct lottery API (expected: 567) ==="
-          curl -s -o /dev/null -w "HTTP %{http_code}" -m 15 "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1" -H "User-Agent: Mozilla/5.0" -H "Referer: https://www.lottery.gov.cn/"
-          echo ""
-          echo "=== 4. lottery.gov.cn HTML page ==="
-          curl -s -o /dev/null -w "HTTP %{http_code} | type: %{content_type}" -m 15 "https://www.lottery.gov.cn/kj/kjlb.html?plw" -H "User-Agent: Mozilla/5.0"
-          echo ""
-          echo "=== 5. 500.com lottery data ==="
-          curl -s -o /dev/null -w "HTTP %{http_code} | type: %{content_type}" -m 15 "https://datachart.500.com/plw/history/newinc/history.php?limit=3&sort=0" -H "User-Agent: Mozilla/5.0"
-          echo ""
-          echo "=== 6. 500.com content sample ==="
-          curl -s -m 15 "https://datachart.500.com/plw/history/newinc/history.php?limit=3&sort=0" -H "User-Agent: Mozilla/5.0" | head -c 500
-          echo ""
-          echo "=== 7. cjcp.com ==="
-          curl -s -o /dev/null -w "HTTP %{http_code}" -m 15 "https://kaijiang.cjcp.com.cn/plw/" -H "User-Agent: Mozilla/5.0"
-          echo ""
-          echo "=== 8. Test GitHub-hosted lottery data repos ==="
-          curl -s -m 15 "https://raw.githubusercontent.com/anthony086/lottery-data/main/pl5/draws.json" | head -c 300
-          echo ""
-
       - name: Poll for latest draws (21:25-22:00 Beijing, every 60s)
         env:
-          # Supabase Edge Function 中继 URL（体彩接口 WAF 拦截 GitHub Actions IP，返回 HTTP 567）
-          # 部署方法见 README.md → Supabase Edge Function 部署
-          # 未设置时直连体彩接口（适用于本地/非云环境）
+          # 可选中继（直连失败时兜底）；体彩 API 在腾讯 EdgeOne CDN 上，海外通常可达
           PROXY_URL: ${{ secrets.PROXY_URL }}
         run: |
-          set +e  # 禁用 -e，让 --check 的非零退出码能被捕获
+          set +e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -71,7 +39,6 @@ jobs:
             NOW=$(date -u '+%H:%M UTC')
             echo "=== 轮询 #$i/36 ($NOW) ==="
 
-            # 轻量检查：1 次 API 调用，比较最新期号
             python scripts/fetch_data.py --check
             CHECK_CODE=$?
 
@@ -101,4 +68,4 @@ jobs:
             fi
           done
 
-          echo "=== 21:25-22:00 窗口结束，未检测到新数据 ==="
+          echo "=== 21:25-22:00 窗口结束 ==="
