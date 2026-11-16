@@ -7,7 +7,7 @@ official public endpoint and write them to data/draws.json atomically.
 - 仅使用标准库；不绕过验证码/登录/WAF/频率限制；失败时旧文件保持不变。
 - number 为完整五位开奖号码（字符串，保留前导零）。
 - --check 模式：仅拉取第 1 页比较最新期号，不写文件，供轮询使用。
-- PROXY_URL 环境变量：设置后通过 Cloudflare Worker 中继访问体彩接口
+- PROXY_URL 环境变量：设置后通过 Supabase Edge Function 中继访问体彩接口
   （GitHub Actions 的 Azure IP 被体彩 WAF 拦截返回 HTTP 567，需走中继）。
 """
 import argparse
@@ -28,7 +28,7 @@ TARGET = int(os.getenv("SPORTTERY_TARGET", "500"))
 MAX_PAGES = int(os.getenv("SPORTTERY_MAX_PAGES", "6"))
 MAX_RETRIES = int(os.getenv("SPORTTERY_MAX_RETRIES", "4"))
 OUT = Path(os.getenv("OUT_PATH", "data/draws.json"))
-# Cloudflare Worker 中继 URL（GitHub Actions 需设置此变量）
+# Supabase Edge Function 中继 URL（GitHub Actions 需设置此变量）
 PROXY_URL = os.getenv("PROXY_URL", "")
 
 

@@ -33,7 +33,11 @@ pailie5-site/
 ├─ style.css               # 样式（深色主题）
 ├─ app.js                  # 分析与交互逻辑（纯 vanilla，无依赖）
 ├─ .nojekyll               # 让 GitHub Pages 原样输出 data/*.json
-├─ cloudflare-worker.js    # Cloudflare Worker 中继代码（绕过体彩 WAF 的 IP 拦截）
+├─ cloudflare-worker.js    # Cloudflare Worker 中继（备用，IP 被体彩 WAF 拦截）
+├─ supabase/
+│  └─ edge-functions/
+│     └─ p5-proxy/
+│        └─ index.ts       # Supabase Edge Function 中继（推荐方案）
 ├─ data/
 │  └─ draws.json           # 种子数据（500 期，官方接口抓取）
 ├─ scripts/
@@ -76,30 +80,38 @@ python3 scripts/fetch_data.py
 
 `.github/workflows/update-draws.yml` 每天北京时间 **21:25-22:00 每分钟轮询**体彩官方接口，开奖后第一时间抓取并提交更新。
 
-### ⚠️ 必须部署 Cloudflare Worker（否则 Actions 无法访问体彩接口）
+### ⚠️ 必须部署 Supabase Edge Function（否则 Actions 无法访问体彩接口）
 
-体彩官方接口的 WAF 会拦截 GitHub Actions 的 Azure 服务器 IP（返回 HTTP 567）。需要部署一个免费的 Cloudflare Worker 做中继：
+体彩官方接口的 WAF 会拦截 GitHub Actions 的 Azure 服务器 IP（返回 HTTP 567），Cloudflare Worker 的 IP 同样被拦截。**Supabase Edge Functions** 运行在 Deno Deploy 全球边缘网络，IP 段不同，可正常访问体彩接口。
 
-**1. 创建 Worker（2 分钟，免费）**
+**1. 创建 Supabase 项目（2 分钟，免费）**
 
-1. 打开 <https://dash.cloudflare.com> → 注册/登录（免费）
-2. 左侧 **Workers & Pages** → **Create** → **Create Worker**
-3. Name 随便填（如 `p5-proxy`），点 **Deploy**
-4. 点 **Edit code**，删除默认代码，粘贴 `cloudflare-worker.js` 的全部内容
+1. 打开 <https://supabase.com> → 注册/登录（免费，不需信用卡）
+2. 点 **New Project**，Name 填 `pailie5`，设一个数据库密码，选 **Free** 区域
+3. 等待约 1 分钟项目初始化完成
+
+**2. 部署 Edge Function**
+
+1. 在 Supabase Dashboard 左侧菜单找到 **Edge Functions**（或 Functions）
+2. 点 **Create a new function** / **Deploy a new function**
+3. Function name 填 `p5-proxy`
+4. 将 `supabase/edge-functions/p5-proxy/index.ts` 的全部内容粘贴到编辑器
 5. 点 **Deploy**
-6. 复制 Worker URL（形如 `https://p5-proxy.<你的用户名>.workers.dev`）
+6. 复制函数 URL（形如 `https://abcdefgh.supabase.co/functions/v1/p5-proxy`）
 
-**2. 测试 Worker**
+> **重要**：确保函数的 **JWT verification** 设为 **关闭**（Verify JWT = off），否则 GitHub Actions 无法调用。在 Dashboard 的 Edge Functions 页面可切换此设置。
 
-浏览器打开 `https://p5-proxy.xxx.workers.dev/?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1`，应返回 JSON 开奖数据。
+**3. 测试函数**
 
-**3. 添加 GitHub Secret**
+浏览器打开 `https://你的项目.supabase.co/functions/v1/p5-proxy/?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1`，应返回 JSON 开奖数据（含 `value.list` 数组）。
+
+**4. 添加 GitHub Secret**
 
 仓库 **Settings → Secrets and variables → Actions → New repository secret**：
 - Name: `PROXY_URL`
-- Value: 你的 Worker URL（如 `https://p5-proxy.xxx.workers.dev`）
+- Value: 你的 Supabase 函数 URL（如 `https://abcdefgh.supabase.co/functions/v1/p5-proxy`）
 
-设置后 Actions 工作流会自动通过 Worker 中继访问体彩接口。未设置时脚本直连（适用于本地/非云环境）。
+设置后 Actions 工作流会自动通过 Supabase 中继访问体彩接口。未设置时脚本直连（适用于本地/非云环境）。
 
 ### 手动触发
 
