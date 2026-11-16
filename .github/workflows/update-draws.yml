@@ -5,6 +5,11 @@ on:
     # 每天 UTC 13:25 = 北京时间 21:25 开始轮询
     - cron: "25 13 * * *"
   workflow_dispatch:
+    inputs:
+      rounds:
+        description: "手动运行时的轮询次数（1 = 只抓一次，用于连通性测试）"
+        required: false
+        default: "1"
 
 permissions:
   contents: write
@@ -31,9 +36,18 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          for i in $(seq 1 36); do
+          # 定时任务轮询 36 轮（覆盖 21:25-22:00）；手动触发默认只跑 1 轮便于快速验证连通性
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            ROUNDS=36
+          else
+            ROUNDS="${{ github.event.inputs.rounds }}"
+            ROUNDS=${ROUNDS:-1}
+          fi
+          echo "本次轮询次数：$ROUNDS（触发方式：${{ github.event_name }}）"
+
+          for i in $(seq 1 $ROUNDS); do
             NOW=$(date -u '+%H:%M UTC')
-            echo "=== 轮询 #$i/36 ($NOW) ==="
+            echo "=== 轮询 #$i/$ROUNDS ($NOW) ==="
 
             python scripts/fetch_data.py --check
             CHECK_CODE=$?
@@ -59,9 +73,9 @@ jobs:
               echo ">>> 检查异常 (code=$CHECK_CODE)，跳过本轮"
             fi
 
-            if [ $i -lt 36 ]; then
+            if [ $i -lt $ROUNDS ]; then
               sleep 60
             fi
           done
 
-          echo "=== 21:25-22:00 窗口结束 ==="
+          echo "=== 本次轮询结束 ==="
