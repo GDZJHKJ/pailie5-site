@@ -23,9 +23,9 @@ from urllib.request import Request, urlopen
 URL = os.getenv("SPORTTERY_API_URL",
                "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry")
 GAME_NO = os.getenv("SPORTTERY_GAME_NO", "350133")
-PAGE_SIZE = int(os.getenv("SPORTTERY_PAGE_SIZE", "500"))  # 一次取 500 期
+PAGE_SIZE = int(os.getenv("SPORTTERY_PAGE_SIZE", "100"))  # API 每页上限 100
 TARGET = int(os.getenv("SPORTTERY_TARGET", "500"))
-MAX_PAGES = int(os.getenv("SPORTTERY_MAX_PAGES", "2"))
+MAX_PAGES = int(os.getenv("SPORTTERY_MAX_PAGES", "6"))  # 6×100=600，去重后取 500
 MAX_RETRIES = int(os.getenv("SPORTTERY_MAX_RETRIES", "3"))
 OUT = Path(os.getenv("OUT_PATH", "data/draws.json"))
 PROXY_URL = os.getenv("PROXY_URL", "")  # 可选中继，直连失败时兜底
