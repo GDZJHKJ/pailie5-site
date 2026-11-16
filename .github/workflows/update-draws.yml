@@ -9,10 +9,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: update-p5-draws
-  cancel-in-progress: false
-
 jobs:
   fetch:
     runs-on: ubuntu-latest
