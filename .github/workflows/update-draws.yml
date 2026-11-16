@@ -31,20 +31,14 @@ jobs:
         env:
           PROXY_URL: ${{ secrets.PROXY_URL }}
         run: |
-          echo "PROXY_URL set: $([ -n "$PROXY_URL" ] && echo YES || echo NO)"
-          if [ -n "$PROXY_URL" ]; then
-            echo "--- Health check (no params) ---"
-            curl -s -m 15 "$PROXY_URL" | head -c 500
-            echo ""
-            echo "--- API test (with params) ---"
-            RESP=$(curl -s -m 20 -w "\n%{http_code}" "$PROXY_URL/?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1")
-            HTTP_CODE=$(echo "$RESP" | tail -1)
-            BODY=$(echo "$RESP" | sed '$d')
-            echo "HTTP status: $HTTP_CODE"
-            echo "Response body (first 800 chars):"
-            echo "$BODY" | head -c 800
-            echo ""
-          fi
+          echo "PROXY_URL: $PROXY_URL"
+          echo "--- Health check ---"
+          curl -s -m 15 "$PROXY_URL" | head -c 500
+          echo ""
+          echo "--- API test (no trailing slash, 60s timeout) ---"
+          curl -sv -m 60 "$PROXY_URL?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1" 2>&1 | tail -30
+          echo ""
+          echo "--- Exit code: $? ---"
 
       - name: Poll for latest draws (21:25-22:00 Beijing, every 60s)
         env:
