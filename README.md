@@ -1,6 +1,6 @@
 # 排列五 · 开奖数据分析与杀号排除
 
-一个部署在 GitHub Pages 的纯静态网站：自动从**中国体育彩票官方公开接口**拉取排列五（排列5，游戏编码 `350133`）历史开奖号码，提供频率统计、遗漏统计、杀号排除方案与滑动窗口回测。
+一个部署在 GitHub Pages 的纯静态网站：自动拉取**中国体育彩票排列5**（游戏编码 `350133`）历史开奖号码（官方接口优先，境外被 WAF 拦截时自动降级到数据一致的公开镜像），提供频率统计、遗漏统计、杀号排除方案与滑动窗口回测。
 
 > ⚠️ **免责声明**：彩票开奖号码由随机设备产生、各期相互独立、**无法预测**。本站仅提供公开开奖信息的统计与回测工具，“杀号/排除”是基于历史频率的统计观察，**不改变中奖概率、不承诺任何中奖结果**。请理性购彩、量力而行，未成年人不得购彩。
 
@@ -33,17 +33,18 @@ pailie5-site/
 ├─ style.css               # 样式（深色主题）
 ├─ app.js                  # 分析与交互逻辑（纯 vanilla，无依赖）
 ├─ .nojekyll               # 让 GitHub Pages 原样输出 data/*.json
-├─ cloudflare-worker.js    # Cloudflare Worker 中继（备用，IP 被体彩 WAF 拦截）
+├─ cloudflare-worker.js    # Cloudflare Worker 中继（实测出口 IP 被体彩 WAF 拦截，仅留档）
 ├─ supabase/
 │  └─ edge-functions/
 │     └─ p5-proxy/
-│        └─ index.ts       # Supabase Edge Function 中继（推荐方案）
+│        └─ index.ts       # Supabase Edge Function 中继（实测同样被拦，仅留档）
 ├─ data/
 │  └─ draws.json           # 种子数据（500 期，官方接口抓取）
 ├─ scripts/
 │  └─ fetch_data.py        # 官方接口抓取脚本（标准库，原子写，支持 PROXY_URL）
 └─ .github/workflows/
-   └─ update-draws.yml     # 21:25-22:00 每分钟轮询，自动拉取并提交更新
+   ├─ update-draws.yml     # 21:25-22:00 每分钟轮询，官方优先 + 镜像兜底
+   └─ probe-sources.yml    # 数据源可达性探测（排查用）
 ```
 
 ## 本地运行
@@ -80,49 +81,50 @@ python3 scripts/fetch_data.py
 
 `.github/workflows/update-draws.yml` 每天北京时间 **21:25-22:00 每分钟轮询**体彩官方接口，开奖后第一时间抓取并提交更新。
 
-### ⚠️ 必须部署 Supabase Edge Function（否则 Actions 无法访问体彩接口）
+### 数据链路：官方优先，被拦时自动降级镜像
 
-体彩官方接口的 WAF 会拦截 GitHub Actions 的 Azure 服务器 IP（返回 HTTP 567），Cloudflare Worker 的 IP 同样被拦截。**Supabase Edge Functions** 运行在 Deno Deploy 全球边缘网络，IP 段不同，可正常访问体彩接口。
+体彩官方接口 `webapi.sporttery.cn` 部署在腾讯 EdgeOne CDN 上，会对**境外数据中心 IP** 返回 `HTTP 567`（WAF 拦截页）。实测结论（2026-11-16 由 Actions 实机探测）：
 
-**1. 创建 Supabase 项目（2 分钟，免费）**
+| 数据源 | GitHub Actions（Azure） | 说明 |
+|---|---|---|
+| `webapi.sporttery.cn` 官方接口 | ❌ 567 | WAF 拦截境外云 IP，DNS 正常但被拒 |
+| `pdf.sporttery.cn` 官方公告 PDF | ❌ 567 | 同上 |
+| Cloudflare Worker 中继 | ❌ 567 | Worker 出口 IP 同样被拦 |
+| Supabase Edge Function 中继 | ❌ 502/567 | 边缘函数出口 IP 同样被拦 |
+| 公共 CORS 代理（allorigins / codetabs / jina） | ❌ 500 / 522 / 403 | 均无法穿透 |
+| **`kaijiang.500.com` 静态 XML** | ✅ 200 | 境外可直连，数据与官方逐条一致 |
 
-1. 打开 <https://supabase.com> → 注册/登录（免费，不需信用卡）
-2. 点 **New Project**，Name 填 `pailie5`，设一个数据库密码，选 **Free** 区域
-3. 等待约 1 分钟项目初始化完成
+因此工作流按 **官方 → 镜像** 顺序取数：
 
-**2. 部署 Edge Function**
+1. **官方优先**：`scripts/fetch_data.py` 直连官方接口（设了 `PROXY_URL` 则走中继），拿到即用，`meta.source` 标为官方。
+2. **降级镜像**：官方被拦（567 / 超时 / 中继 502）时，`scripts/fetch_mirror.py` 从
+   `https://kaijiang.500.com/static/info/kaijiang/xml/plw/list.xml` 取数。
+3. **写入前强校验**：镜像记录必须与本地已有官方数据做**重叠期逐条比对**（期号、五位号码、开奖日期），
+   不一致条数 > 0 或重叠样本 < 50 期就**拒绝写入**，宁可停在旧数据也不写错数据。
+   当前 500 期重叠样本的校验结果为 **0 条不一致**，且镜像覆盖至 `04001` 期（7778 期历史）。
+4. 写入成功后才 `git commit` + `git push`，触发 Pages 重新部署。
 
-1. 在 Supabase Dashboard 左侧菜单找到 **Edge Functions**（或 Functions）
-2. 点 **Create a new function** / **Deploy a new function**
-3. Function name 填 `p5-proxy`
-4. 将 `supabase/edge-functions/p5-proxy/index.ts` 的全部内容粘贴到编辑器
-5. 点 **Deploy**
-6. 复制函数 URL（形如 `https://abcdefgh.supabase.co/functions/v1/p5-proxy`）
-
-> **重要**：确保函数的 **JWT verification** 设为 **关闭**（Verify JWT = off），否则 GitHub Actions 无法调用。在 Dashboard 的 Edge Functions 页面可切换此设置。
-
-**3. 测试函数**
-
-浏览器打开 `https://你的项目.supabase.co/functions/v1/p5-proxy/?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1`，应返回 JSON 开奖数据（含 `value.list` 数组）。
-
-**4. 添加 GitHub Secret**
-
-仓库 **Settings → Secrets and variables → Actions → New repository secret**：
-- Name: `PROXY_URL`
-- Value: 你的 Supabase 函数 URL（如 `https://abcdefgh.supabase.co/functions/v1/p5-proxy`）
-
-设置后 Actions 工作流会自动通过 Supabase 中继访问体彩接口。未设置时脚本直连（适用于本地/非云环境）。
+> 镜像只是取数通道，数据本身仍是官方开奖结果；每次镜像写入都会在 `meta.verification` 里留下
+> 校验快照（重叠期数、不一致条数）。若你有国内服务器 / 可用的中继，把它设为仓库 Secret
+> `PROXY_URL`（形如 `https://你的中继/fetch`，接受 `?gameNo=&pageSize=&pageNo=` 参数），
+> 官方通道即可恢复，镜像只作为兜底。
 
 ### 手动触发
 
-也可在仓库 **Actions** 页手动触发 `Update P5 Draws` 工作流（`workflow_dispatch`）测试。
+仓库 **Actions** → `Update P5 Draws` → **Run workflow**，可填 `rounds`（轮询次数，默认 1）：
+
+- `rounds=1`：只抓一次，约 1 分钟出结果，用于验证链路
+- `rounds=36`：等同定时任务的 21:25-22:00 全程轮询
+
+另有一个 `Probe Data Sources` 工作流，一次性探测各数据源在 Actions 环境下的可达性（排查用，可随时手动跑）。
 
 ### 工作流逻辑
 
-1. 北京时间 21:25 启动，共 36 轮（每轮间隔 60 秒，覆盖 21:25-22:00）
-2. 每轮先用 `--check` 模式轻量检查（1 次 API 调用，比较最新期号）
-3. 检测到新数据 → 全量拉取 500 期 → `git commit` → `git push` → 退出
-4. 无新数据 → 等 60 秒 → 下一轮
+1. 北京时间 21:25 启动（cron `25 13 * * *`，UTC），共 36 轮、每轮间隔 60 秒，覆盖 21:25-22:00
+2. 每轮先 `fetch_data.py --check`（官方，拉 1 条比期号，不写文件）
+3. 官方有新数据 → 全量拉 500 期 → 校验 → 提交推送 → 退出
+4. 官方不可用 → `fetch_mirror.py --check`（镜像 + 重叠校验）；有新数据则全量写入 → 提交推送 → 退出
+5. 双方都无新数据 → 等 60 秒 → 下一轮；22:00 仍未出新号则正常结束（保留旧数据）
 
 ## 杀号排除逻辑
 
