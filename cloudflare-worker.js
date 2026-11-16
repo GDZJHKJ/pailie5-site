@@ -11,16 +11,16 @@ export default {
   async fetch(request) {
     const url = new URL(request.url);
 
-    // 健康检查
-    if (url.pathname === '/' || url.pathname === '/health') {
+    // 仅 /health 返回健康状态；其他所有请求（含带 query params 的 /）一律转发
+    if (url.pathname === '/health') {
       return new Response(JSON.stringify({ status: 'ok', service: 'pailie5-proxy' }), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       });
     }
 
-    // 转发到体彩官方接口
+    // 转发到体彩官方接口（透传所有 query params）
     const apiBase = 'https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry';
-    const fullUrl = apiBase + url.search; // 透传所有 query params
+    const fullUrl = apiBase + url.search;
 
     try {
       const resp = await fetch(fullUrl, {
