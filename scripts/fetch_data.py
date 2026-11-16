@@ -53,7 +53,12 @@ def request_page(page: int):
             req = Request(full_url, headers=headers)
             with urlopen(req, timeout=25) as resp:
                 raw = resp.read().decode("utf-8", "replace")
-            return json.loads(raw)
+            data = json.loads(raw)
+            # 调试：如果响应缺少 value 字段，打印前 300 字符帮助诊断
+            if not isinstance(data, dict) or not data.get("value"):
+                print(f"[debug:{label}] 响应缺少value字段, keys={list(data.keys()) if isinstance(data, dict) else type(data).__name__}", flush=True)
+                print(f"[debug:{label}] 前300字符: {raw[:300]}", flush=True)
+            return data
         except (HTTPError, URLError) as exc:
             if attempt < MAX_RETRIES:
                 wait = 5 * attempt
