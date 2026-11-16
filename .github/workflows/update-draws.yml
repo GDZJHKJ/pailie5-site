@@ -31,14 +31,30 @@ jobs:
         env:
           PROXY_URL: ${{ secrets.PROXY_URL }}
         run: |
-          echo "PROXY_URL: $PROXY_URL"
-          echo "--- Health check ---"
-          curl -s -m 15 "$PROXY_URL" | head -c 500
+          echo "=== 1. Supabase health ==="
+          curl -s -m 15 "$PROXY_URL" | head -c 200
           echo ""
-          echo "--- API test (no trailing slash, 60s timeout) ---"
-          curl -sv -m 60 "$PROXY_URL?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1" 2>&1 | tail -30
+          echo "=== 2. Supabase → lottery API (expected: 567 blocked) ==="
+          curl -s -m 30 "$PROXY_URL?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1" | head -c 200
           echo ""
-          echo "--- Exit code: $? ---"
+          echo "=== 3. Direct lottery API (expected: 567) ==="
+          curl -s -o /dev/null -w "HTTP %{http_code}" -m 15 "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133&provinceId=0&pageSize=1&isVerify=1&pageNo=1" -H "User-Agent: Mozilla/5.0" -H "Referer: https://www.lottery.gov.cn/"
+          echo ""
+          echo "=== 4. lottery.gov.cn HTML page ==="
+          curl -s -o /dev/null -w "HTTP %{http_code} | type: %{content_type}" -m 15 "https://www.lottery.gov.cn/kj/kjlb.html?plw" -H "User-Agent: Mozilla/5.0"
+          echo ""
+          echo "=== 5. 500.com lottery data ==="
+          curl -s -o /dev/null -w "HTTP %{http_code} | type: %{content_type}" -m 15 "https://datachart.500.com/plw/history/newinc/history.php?limit=3&sort=0" -H "User-Agent: Mozilla/5.0"
+          echo ""
+          echo "=== 6. 500.com content sample ==="
+          curl -s -m 15 "https://datachart.500.com/plw/history/newinc/history.php?limit=3&sort=0" -H "User-Agent: Mozilla/5.0" | head -c 500
+          echo ""
+          echo "=== 7. cjcp.com ==="
+          curl -s -o /dev/null -w "HTTP %{http_code}" -m 15 "https://kaijiang.cjcp.com.cn/plw/" -H "User-Agent: Mozilla/5.0"
+          echo ""
+          echo "=== 8. Test GitHub-hosted lottery data repos ==="
+          curl -s -m 15 "https://raw.githubusercontent.com/anthony086/lottery-data/main/pl5/draws.json" | head -c 300
+          echo ""
 
       - name: Poll for latest draws (21:25-22:00 Beijing, every 60s)
         env:
