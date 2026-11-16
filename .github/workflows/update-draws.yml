@@ -34,6 +34,7 @@ jobs:
           # 未设置时直连体彩接口（适用于本地/非云环境）
           PROXY_URL: ${{ secrets.PROXY_URL }}
         run: |
+          set +e  # 禁用 -e，让 --check 的非零退出码能被捕获
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
