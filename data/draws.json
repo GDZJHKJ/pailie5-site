@@ -6,13 +6,18 @@
     "game_no": "350133",
     "game_name": "排列5",
     "records": 500,
-    "latest_issue": "26310",
-    "latest_date": "2026-11-20",
+    "latest_issue": "26311",
+    "latest_date": "2026-11-21",
     "status": "mirror fetch (mirror 与官方历史数据逐条校验通过)",
     "verification": "与本地官方数据重叠 499 期，号码/日期不一致 0 条",
     "note": "号码为五位开奖号码字符串（保留前导零）；按期号新→旧排序"
   },
   "draws": [
+    {
+      "period": "26311",
+      "date": "2026-11-21",
+      "number": "84057"
+    },
     {
       "period": "26310",
       "date": "2026-11-20",
@@ -2507,11 +2512,6 @@
       "period": "25163",
       "date": "2025-06-22",
       "number": "76623"
-    },
-    {
-      "period": "25162",
-      "date": "2025-06-21",
-      "number": "31742"
     }
   ]
 }
